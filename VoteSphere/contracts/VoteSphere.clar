@@ -101,4 +101,42 @@
       (err "Proposal not found"))
     (err "No vote found")))
 
+;; ----------------------------
+;; Proposal Extensions and Queries
+;; ----------------------------
+(define-public (extend-voting-period (proposal-id uint) (extra-blocks uint))
+  (match (map-get? proposals { id: proposal-id })
+    proposal
+    (if (is-eq tx-sender (get creator proposal))
+      (if (< block-height (get ends-at proposal))
+        (begin
+          (map-set proposals { id: proposal-id }
+            { creator: (get creator proposal),
+              description: (get description proposal),
+              votes-for: (get votes-for proposal),
+              votes-against: (get votes-against proposal),
+              active: (get active proposal),
+              created-at: (get created-at proposal),
+              ends-at: (+ (get ends-at proposal) extra-blocks),
+              quorum: (get quorum proposal) })
+          (ok "Voting period extended"))
+        (err "Cannot extend closed proposal"))
+      (err "Only creator can extend voting period"))
+    (err "Proposal not found")))
+
+(define-read-only (get-proposal (proposal-id uint))
+  (map-get? proposals { id: proposal-id }))
+
+(define-read-only (get-vote (proposal-id uint) (voter principal))
+  (map-get? voters { proposal-id: proposal-id, voter: voter }))
+
+(define-read-only (get-results (proposal-id uint))
+  (match (map-get? proposals { id: proposal-id })
+    proposal
+    (let ((total-votes (+ (get votes-for proposal) (get votes-against proposal))))
+      (ok { votes-for: (get votes-for proposal), 
+            votes-against: (get votes-against proposal), 
+            ends-at: (get ends-at proposal), 
+            quorum-met: (>= total-votes (get quorum proposal)) }))
+    (err "Proposal not found")))
 
